@@ -22,21 +22,22 @@ pub struct Tray {
 
 impl Tray {
     pub fn new(shared: &Shared, auto_paste: bool) -> anyhow::Result<Self> {
+        let s = shared.lang.strings();
         let menu = Menu::new();
-        let status = MenuItem::new("空闲 · 等待手机连接", false, None);
-        let show_qr = MenuItem::new("显示二维码（打开浏览器）", true, None);
-        let copy_link = MenuItem::new("复制手机链接", true, None);
-        let paste = CheckMenuItem::new("粘贴到光标处", true, auto_paste, None);
-        let clipboard_only = CheckMenuItem::new("仅复制到剪贴板", true, !auto_paste, None);
-        let rotate = MenuItem::new("重新生成令牌", true, None);
-        let network = Submenu::new("网络", true);
+        let status = MenuItem::new(s.status_idle, false, None);
+        let show_qr = MenuItem::new(s.menu_show_qr, true, None);
+        let copy_link = MenuItem::new(s.menu_copy_link, true, None);
+        let paste = CheckMenuItem::new(s.menu_paste, true, auto_paste, None);
+        let clipboard_only = CheckMenuItem::new(s.menu_clipboard_only, true, !auto_paste, None);
+        let rotate = MenuItem::new(s.menu_rotate, true, None);
+        let network = Submenu::new(s.menu_network, true);
         let mut network_items = Vec::new();
         for ip in shared.candidates.iter() {
             let item = CheckMenuItem::new(ip.to_string(), true, false, None);
             network.append(&item)?;
             network_items.push(item);
         }
-        let quit = MenuItem::new("退出 nomic", true, None);
+        let quit = MenuItem::new(s.menu_quit, true, None);
 
         menu.append(&status)?;
         menu.append(&PredefinedMenuItem::separator())?;
@@ -63,7 +64,7 @@ impl Tray {
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("nomic · 手机文字输入")
+            .with_tooltip(s.tray_tooltip)
             .with_icon(icon::icon(false, false))
             .build()?;
 
@@ -116,11 +117,13 @@ impl Tray {
             if let Ok(mut cb) = arboard::Clipboard::new() {
                 let _ = cb.set_text(shared.mobile_url());
             }
-            self.status.set_text("已复制手机链接到剪贴板");
+            self.status
+                .set_text(shared.lang.strings().status_link_copied);
             return false;
         }
         if id == self.paste_id || id == self.clipboard_only_id {
             let paste = id == self.paste_id;
+            let s = shared.lang.strings();
             *shared.mode.write().unwrap() = if paste {
                 DeliveryMode::Paste
             } else {
@@ -129,9 +132,9 @@ impl Tray {
             self.paste.set_checked(paste);
             self.clipboard_only.set_checked(!paste);
             self.status.set_text(if paste {
-                "投递：粘贴到光标处"
+                s.mode_paste
             } else {
-                "投递：仅复制到剪贴板"
+                s.mode_clipboard_only
             });
             return false;
         }
@@ -140,7 +143,8 @@ impl Tray {
             shared.token_generation.send_modify(|g| *g += 1);
             let _ = shared.kick.send(());
             let _ = shared.ui_tx.send(UiCommand::RotateToken);
-            self.status.set_text("令牌已更新，请重新扫码");
+            self.status
+                .set_text(shared.lang.strings().status_token_rotated);
             return false;
         }
         if id == self.quit_id {
@@ -153,8 +157,13 @@ impl Tray {
             let ip = shared.candidates[idx];
             *shared.lan_ip.write().unwrap() = ip;
             self.set_selected_ip(ip.to_string());
-            self.status
-                .set_text(format!("网络已切换为 {ip}，请重新扫码"));
+            self.status.set_text(
+                shared
+                    .lang
+                    .strings()
+                    .fmt_network_switched
+                    .replace("{ip}", &ip.to_string()),
+            );
         }
         false
     }

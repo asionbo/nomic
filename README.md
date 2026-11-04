@@ -6,7 +6,7 @@
 
 ## 状态
 
-✅ 已在 macOS（arm64）完成编译与端到端验证：WS 发送中文/emoji → 剪贴板 → 模拟 ⌘V 粘贴 → ack 回传手机页；安全校验（错误 token / 伪造 Host 返回 404）与降级路径（无辅助功能权限时自动转仅剪贴板）均实测通过。release 二进制约 1.5 MB，RSS 约 50 MB。Windows / Linux 平台尚未实测。
+✅ 已在 macOS（arm64）完成编译与端到端验证：WS 发送中文/emoji → 剪贴板 → 模拟 ⌘V 粘贴 → ack 回传手机页；安全校验（错误 token / 伪造 Host 返回 404）与降级路径（无辅助功能权限时自动转仅剪贴板）均实测通过。中英文双语界面（默认英文）也已实测两种语言的页面、托盘状态与 ack 消息。release 二进制约 1.5 MB，RSS 约 50 MB。Windows / Linux 平台尚未实测。
 
 工具链位置（若 cargo 不在 PATH）：
 
@@ -23,18 +23,21 @@ cargo run --release
 # 可选：
 cargo run --release -- --port 8765
 cargo run --release -- --clipboard-only
+cargo run --release -- --lang zh    # 界面切换中文，默认英文
 ```
 
-启动后托盘出现，并自动用系统默认浏览器打开二维码页。托盘菜单：
+**多语言**：默认英文（`en`），`--lang zh` 切中文。覆盖托盘菜单与状态、二维码页、手机录入页、ack 提示与错误消息；日志固定英文。目前支持 `en` / `zh` 两个语言，字符串集中在 `src/i18n.rs`，加语言只需新增一份 `Strings` 常量并在 `Lang::from_str` / `Lang::strings` 里登记。
+
+启动后托盘出现，并自动用系统默认浏览器打开二维码页。以下菜单名以中文（`--lang zh`）为例：
 
 | 菜单项 | 作用 |
 |---|---|
-| 显示二维码（打开浏览器） | 打开本地 `/pair` 页，内含二维码与明文链接 |
-| 复制手机链接 | 复制 `http://<LAN_IP>:<port>/m?t=<token>` |
+| 显示二维码（打开浏览器） / Show QR code | 打开本地 `/pair` 页，内含二维码与明文链接 |
+| 复制手机链接 / Copy phone link | 复制 `http://<LAN_IP>:<port>/m?t=<token>` |
 | 粘贴到光标处 / 仅复制到剪贴板 | 切换投递方式 |
-| 网络 | 多网卡时切换二维码使用的 LAN IP |
-| 重新生成令牌 | 作废旧链接、断开已连接的手机 |
-| 退出 nomic | 优雅关闭服务与托盘 |
+| 网络 / Network | 多网卡时切换二维码使用的 LAN IP |
+| 重新生成令牌 / Regenerate token | 作废旧链接、断开已连接的手机 |
+| 退出 nomic / Quit nomic | 优雅关闭服务与托盘 |
 
 托盘图标：灰色 = 空闲，绿色 = 有设备连接，黄色闪一下 = 刚收到文本。
 

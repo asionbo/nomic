@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{HTML_LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>nomic · 输入</title>
+<title>{{TITLE}}</title>
 <style>
   :root { color-scheme: light dark; --bg: #f6f7f9; --card: #fff; --fg: #1c1e21; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb; --ok: #16a34a; --bad: #dc2626; }
   @media (prefers-color-scheme: dark) { :root { --bg: #111318; --card: #1b1e24; --fg: #e8eaed; --muted: #9aa1ac; --line: #2d323b; --accent: #4f83f1; --ok: #34d399; --bad: #f87171; } }
@@ -35,19 +35,20 @@
   <header>
     <span id="dot" class="dot"></span>
     <h1>nomic</h1>
-    <span id="status">连接中…</span>
+    <span id="status"></span>
   </header>
-  <textarea id="text" placeholder="在这里输入，或用手机键盘上的麦克风按钮语音听写…" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
+  <textarea id="text" placeholder="{{PLACEHOLDER}}" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
   <div class="actions">
-    <button id="send" type="button">发送到电脑</button>
-    <button id="clear" type="button">清空</button>
+    <button id="send" type="button">{{SEND}}</button>
+    <button id="clear" type="button">{{CLEAR}}</button>
   </div>
-  <p class="hint">发送前请先点回电脑上要输入的输入框。文字会写入剪贴板并自动粘贴；若自动粘贴不可用，会提示你手动按 ⌘/Ctrl+V。语音听写请用手机系统键盘自带的麦克风，本页面不申请麦克风权限。</p>
+  <p class="hint">{{HINT}}</p>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
 (() => {
   'use strict';
+  const I18N = {{I18N}};
   const TOKEN = new URLSearchParams(location.search).get('t') || '';
   const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?t=' + encodeURIComponent(TOKEN);
   const $ = (id) => document.getElementById(id);
@@ -69,16 +70,16 @@
     clearTimeout(ackTimer);
     pending = null;
     send.disabled = false;
-    say(msg || '发送失败，请重试');
+    say(msg || I18N.toastFailed.replace('{msg}', 'unknown'));
   }
   function connect() {
     if (stopped) return;
-    setState('', '连接中…');
+    setState('', I18N.connecting);
     try { ws = new WebSocket(wsUrl); } catch (_) { return scheduleRetry(); }
 
     ws.onopen = () => {
       retry = 1000;
-      setState('on', '已连接');
+      setState('on', I18N.connected);
       if (pending) {
         // 重连后重发尚未确认的消息（服务端按 id 去重由手机侧 ack 保证不丢字）。
         ws.send(JSON.stringify(pending));
@@ -92,20 +93,20 @@
         const st = m.status;
         if (st === 'pasted') {
           text.value = '';
-          say('已粘贴到电脑');
+          say(I18N.toastPasted);
         } else if (st === 'clipboard-only') {
           text.value = '';
-          say('已复制到剪贴板，请在电脑上按 ⌘/Ctrl+V');
+          say(I18N.toastCopied);
         } else {
-          fail('发送失败：' + (m.message || '未知错误'));
+          fail(I18N.toastFailed.replace('{msg}', m.message || 'unknown'));
           return;
         }
         pending = null;
         send.disabled = text.value.trim() === '' || !ws || ws.readyState !== WebSocket.OPEN;
       } else if (m.type === 'token-expired') {
         stopped = true;
-        setState('off', '令牌已失效');
-        say('链接已失效，请在电脑上重新显示二维码');
+        setState('off', I18N.tokenExpiredStatus);
+        say(I18N.tokenExpiredToast);
         if (ws) ws.close();
       }
     };
@@ -113,21 +114,21 @@
     ws.onclose = () => {
       ws = null;
       if (stopped) return;
-      setState('off', '已断开');
+      setState('off', I18N.disconnected);
       scheduleRetry();
     };
   }
   function scheduleRetry() {
     if (stopped) return;
-    setState('off', '重连中…');
+    setState('off', I18N.reconnecting);
     setTimeout(connect, retry);
     retry = Math.min(retry * 2, 15000);
   }
   function doSend() {
     const value = text.value;
-    if (!value.trim()) { say('请先输入内容'); return; }
-    if (!ws || ws.readyState !== WebSocket.OPEN) { say('尚未连接，正在重连…'); return; }
-    if (pending) { say('上一条还在处理'); return; }
+    if (!value.trim()) { say(I18N.toastEmpty); return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { say(I18N.toastNotConnected); return; }
+    if (pending) { say(I18N.toastBusy); return; }
     pending = { type: 'text', id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10), text: value };
     pendingSentId = pending.id;
     send.disabled = true;
@@ -135,7 +136,7 @@
     // ack 超时保护：不丢字，允许手动重发。
     clearTimeout(ackTimer);
     ackTimer = setTimeout(() => {
-      if (pending && pending.id === pendingSentId) fail('电脑未响应，请重试（内容已保留）');
+      if (pending && pending.id === pendingSentId) fail(I18N.toastNoResponse);
     }, 8000);
   }
   send.addEventListener('click', doSend);
@@ -147,7 +148,7 @@
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && (!ws || ws.readyState !== WebSocket.OPEN) && !stopped) { retry = 1000; connect(); }
   });
-  setState('off', '连接中…');
+  setState('off', I18N.connecting);
   connect();
 })();
 </script>

@@ -23,14 +23,14 @@ impl Injector {
         let clipboard = match Clipboard::new() {
             Ok(c) => Some(c),
             Err(e) => {
-                tracing::error!("剪贴板不可用：{e}");
+                tracing::error!("clipboard unavailable: {e}");
                 None
             }
         };
         let enigo = match Enigo::new(&Settings::default()) {
             Ok(e) => Some(e),
             Err(e) => {
-                tracing::warn!("按键模拟不可用（{e}），自动降级为仅剪贴板");
+                tracing::warn!("key simulation unavailable ({e}); falling back to clipboard-only");
                 None
             }
         };
@@ -42,12 +42,15 @@ impl Injector {
     }
 
     pub fn deliver(&mut self, shared: &Shared, text: &str) -> InjectOutcome {
+        let s = shared.lang.strings();
         let Some(clipboard) = self.clipboard.as_mut() else {
-            return InjectOutcome::Failed("剪贴板不可用".into());
+            return InjectOutcome::Failed(s.err_clipboard_unavailable.into());
         };
         if let Err(e) = clipboard.set_text(text.to_owned()) {
-            tracing::error!("写剪贴板失败：{e}");
-            return InjectOutcome::Failed(format!("写剪贴板失败：{e}"));
+            tracing::error!("clipboard write failed: {e}");
+            return InjectOutcome::Failed(
+                s.fmt_clipboard_write_failed.replace("{e}", &e.to_string()),
+            );
         }
 
         let wants_paste = shared.mode() == DeliveryMode::Paste
@@ -77,7 +80,7 @@ impl Injector {
         match result {
             Ok(()) => InjectOutcome::Pasted,
             Err(e) => {
-                tracing::warn!("模拟粘贴失败（{e}），降级为仅剪贴板；macOS 请检查辅助功能权限");
+                tracing::warn!("simulated paste failed ({e}); degrading to clipboard-only");
                 shared.auto_paste_available.store(false, Ordering::SeqCst);
                 InjectOutcome::ClipboardOnly
             }

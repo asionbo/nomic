@@ -13,7 +13,11 @@ for (const file of files) {
     process.exitCode = 1;
     continue;
   }
-  scripts.forEach((code, i) => {
+  scripts.forEach((raw, i) => {
+    // 服务端渲染占位符：{{JSON_*}} 需为有效 JSON，其余按 JS 字符串字面量替换。
+    const code = raw.replace(/\{\{(\w+)\}\}/g, (_, name) =>
+      name.endsWith('_JSON') || name === 'I18N' ? '{}' : '"x"'
+    );
     try {
       new vm.Script(code, { filename: `${file}#script[${i}]` });
       console.log(`${file}#script[${i}]: syntax OK (${code.length} chars)`);

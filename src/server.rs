@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, watch};
 
 use crate::app::{MAX_CLIENTS, MAX_MESSAGE_BYTES, Shared};
+use crate::i18n::Strings;
 use crate::qr;
 
 #[derive(Deserialize)]
@@ -69,7 +70,7 @@ fn check(state: &Shared, headers: &HeaderMap, t: Option<&str>) -> Option<Respons
     None
 }
 
-fn page(template: &str, body: &str, headers: &HeaderMap) -> Response {
+fn page(body: &str) -> Response {
     let mut res = Html(body.to_owned()).into_response();
     res.headers_mut().insert(
         header::CACHE_CONTROL,
@@ -82,7 +83,6 @@ fn page(template: &str, body: &str, headers: &HeaderMap) -> Response {
             .parse()
             .unwrap(),
     );
-    let _ = (template, headers);
     res
 }
 
@@ -98,7 +98,7 @@ async fn health(
         "ok": true,
         "port": state.port,
         "lan_ip": state.lan_ip().to_string(),
-        "mode": state.mode().label(),
+        "mode": state.mode().label(state.lang),
         "connected": state.connected.load(std::sync::atomic::Ordering::SeqCst),
     }))
     .into_response()
@@ -112,7 +112,16 @@ async fn mobile_page(
     if let Some(r) = check(&state, &headers, q.t.as_deref()) {
         return r;
     }
-    page("mobile", include_str!("../assets/mobile.html"), &headers)
+    let s = state.lang.strings();
+    let body = include_str!("../assets/mobile.html")
+        .replace("{{HTML_LANG}}", s.html_lang)
+        .replace("{{TITLE}}", s.mobile_title)
+        .replace("{{PLACEHOLDER}}", s.mobile_placeholder)
+        .replace("{{SEND}}", s.mobile_send)
+        .replace("{{CLEAR}}", s.mobile_clear)
+        .replace("{{HINT}}", s.mobile_hint)
+        .replace("{{I18N}}", &js_i18n_json(s));
+    page(&body)
 }
 
 async fn pair_page(
@@ -124,12 +133,13 @@ async fn pair_page(
         return r;
     }
     let url = state.mobile_url();
-    let svg = match qr::svg(&url) {
-        Ok(s) => s,
+    let s = state.lang.strings();
+    let svg = match qr::svg(&url, s.pair_aria) {
+        Ok(svg) => svg,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("二维码生成失败：{e}"),
+                s.fmt_qr_failed.replace("{e}", &e.to_string()),
             )
                 .into_response();
         }
@@ -138,8 +148,26 @@ async fn pair_page(
     let body = include_str!("../assets/pair.html")
         .replace("{{QR_SVG}}", &svg)
         .replace("{{MOBILE_URL}}", &html_escape(&url))
-        .replace("{{LAN_ADDRESS}}", &html_escape(&lan_address));
-    page("pair", &body, &headers)
+        .replace("{{HTML_LANG}}", s.html_lang)
+        .replace("{{TITLE}}", s.pair_title)
+        .replace("{{H1}}", s.pair_h1)
+        .replace("{{SUB}}", s.pair_sub)
+        .replace("{{QR_ARIA}}", s.pair_aria)
+        .replace(
+            "{{COPY_JSON}}",
+            &serde_json::to_string(s.pair_copy).unwrap(),
+        )
+        .replace(
+            "{{COPIED_JSON}}",
+            &serde_json::to_string(s.pair_copied).unwrap(),
+        )
+        .replace("{{NOTE_TITLE}}", s.pair_note_title)
+        .replace("{{NOTE1}}", s.pair_note1)
+        .replace("{{NOTE2}}", s.pair_note2)
+        .replace("{{NOTE3}}", s.pair_note3)
+        .replace("{{NOTE4}}", &s.fmt_note4(&html_escape(&lan_address)))
+        .replace("{{NOTE5}}", s.pair_note5);
+    page(&body)
 }
 
 fn html_escape(s: &str) -> String {
@@ -148,6 +176,26 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+/// 手机页 JS 用的字符串，序列化成 JSON 常量内联，避免 JS 里写死中文。
+fn js_i18n_json(s: &Strings) -> String {
+    serde_json::json!({
+        "connecting": s.js_connecting,
+        "connected": s.js_connected,
+        "disconnected": s.js_disconnected,
+        "reconnecting": s.js_reconnecting,
+        "tokenExpiredStatus": s.js_token_expired_status,
+        "tokenExpiredToast": s.js_token_expired_toast,
+        "toastEmpty": s.js_toast_empty,
+        "toastNotConnected": s.js_toast_not_connected,
+        "toastBusy": s.js_toast_busy,
+        "toastPasted": s.js_toast_pasted,
+        "toastCopied": s.js_toast_copied,
+        "toastFailed": s.js_toast_failed,
+        "toastNoResponse": s.js_toast_no_response,
+    })
+    .to_string()
 }
 
 async fn ws_handler(
@@ -191,7 +239,7 @@ async fn handle_socket(
     inject_tx: mpsc::UnboundedSender<crate::app::Injection>,
 ) {
     let n = state.bump_connected(1);
-    tracing::info!("手机已连接（当前 {n} 台）");
+    tracing::info!("phone connected ({n} active)");
     let _ = state.wake.send_event(crate::app::UserEvent::Connected(n));
     let _ = socket
         .send(Message::Text(
@@ -246,10 +294,10 @@ async fn handle_socket(
                                         let _ = state.wake.send_event(crate::app::UserEvent::InjectionReady);
                                         None
                                     }
-                                    Err(_) => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some("桌面端已退出".into()) }),
+                                    Err(_) => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang.strings().err_desktop_exited.into()) }),
                                 }
                             }
-                            _ => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some("消息格式错误或内容为空".into()) }),
+                            _ => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang.strings().err_bad_message.into()) }),
                         };
                         if let Some(msg) = reply
                             && socket
@@ -268,7 +316,7 @@ async fn handle_socket(
     }
 
     let n = state.bump_connected(-1);
-    tracing::info!("手机已断开（当前 {n} 台）");
+    tracing::info!("phone disconnected ({n} active)");
     let _ = state.wake.send_event(crate::app::UserEvent::Connected(n));
     let _ = socket.send(Message::Close(None)).await;
 }

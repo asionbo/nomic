@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{HTML_LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>nomic · 扫码连接</title>
+<title>{{TITLE}}</title>
 <style>
   :root { color-scheme: light dark; --bg: #f6f7f9; --card: #fff; --fg: #1c1e21; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb; }
   @media (prefers-color-scheme: dark) { :root { --bg: #111318; --card: #1b1e24; --fg: #e8eaed; --muted: #9aa1ac; --line: #2d323b; --accent: #6d9cff; } }
@@ -24,23 +24,24 @@
 </head>
 <body>
 <div class="card">
-  <h1>nomic · 手机连接</h1>
-  <p class="sub">用手机相机或扫码 App 扫描</p>
+  <h1>{{H1}}</h1>
+  <p class="sub">{{SUB}}</p>
   <div id="qr">{{QR_SVG}}</div>
   <div class="url">
     <input id="link" readonly value="{{MOBILE_URL}}">
-    <button id="copy" type="button">复制链接</button>
+    <button id="copy" type="button">{{COPY}}</button>
   </div>
   <div class="note">
-    <div><b>连不上？</b></div>
-    <div>1. 手机与电脑必须连同一个 Wi-Fi，且网络未开启「访客隔离 / AP 隔离」。</div>
-    <div>2. 电脑防火墙首次可能弹窗，请允许本程序监听，并把当前 Wi-Fi 设为「专用网络」。</div>
-    <div>3. 若电脑有多个网卡 / 挂了 VPN，可在托盘菜单的「网络」里换一个地址，再重新打开本页。</div>
-    <div>4. 二维码里的地址 <code>{{LAN_ADDRESS}}</code> 不能写成 127.0.0.1，否则手机会打开自己。</div>
-    <div>5. 链接含一次性令牌；重启程序或点托盘「重新生成令牌」后需重新扫码。</div>
+    <div><b>{{NOTE_TITLE}}</b></div>
+    <div>{{NOTE1}}</div>
+    <div>{{NOTE2}}</div>
+    <div>{{NOTE3}}</div>
+    <div>{{NOTE4}}</div>
+    <div>{{NOTE5}}</div>
   </div>
 </div>
 <script>
+  const COPY_LABEL = {{COPIED_JSON}};
   const btn = document.getElementById('copy');
   btn.addEventListener('click', async () => {
     const value = document.getElementById('link').value;
@@ -51,8 +52,8 @@
       el.select();
       document.execCommand('copy');
     }
-    btn.textContent = '已复制';
-    setTimeout(() => { btn.textContent = '复制链接'; }, 1500);
+    btn.textContent = COPY_LABEL;
+    setTimeout(() => { btn.textContent = {{COPY_JSON}}; }, 1500);
   });
 </script>
 </body>

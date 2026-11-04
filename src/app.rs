@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, Result};
 use tokio::sync::{broadcast, mpsc, watch};
 
+use crate::i18n::Lang;
 use crate::server::{ClientToHost, HostToClient};
 
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
@@ -18,10 +19,11 @@ pub enum DeliveryMode {
 }
 
 impl DeliveryMode {
-    pub fn label(self) -> &'static str {
+    pub fn label(self, lang: Lang) -> &'static str {
+        let s = lang.strings();
         match self {
-            DeliveryMode::Paste => "粘贴到光标处",
-            DeliveryMode::ClipboardOnly => "仅复制到剪贴板",
+            DeliveryMode::Paste => s.mode_paste,
+            DeliveryMode::ClipboardOnly => s.mode_clipboard_only,
         }
     }
 }
@@ -30,6 +32,7 @@ impl DeliveryMode {
 #[derive(Clone)]
 pub struct Shared {
     pub port: u16,
+    pub lang: Lang,
     pub token: Arc<std::sync::RwLock<String>>,
     pub lan_ip: Arc<std::sync::RwLock<Ipv4Addr>>,
     pub candidates: Arc<Vec<Ipv4Addr>>,

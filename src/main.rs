@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod app;
+mod i18n;
 mod icon;
 mod inject;
 mod qr;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use i18n::Lang;
 use muda::MenuEvent;
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
@@ -37,6 +39,12 @@ fn main() -> anyhow::Result<()> {
         .and_then(|w| w[1].parse().ok())
         .unwrap_or(8765);
     let clipboard_only = args.iter().any(|a| a == "--clipboard-only");
+    let lang = args
+        .windows(2)
+        .find(|w| w[0] == "--lang")
+        .and_then(|w| Lang::from_str(&w[1]))
+        .unwrap_or_default();
+    let s = lang.strings();
 
     // 先绑定再生成二维码，保证 URL 里的端口是真实端口。
     let listener = app::bind(preferred_port)?;
@@ -47,11 +55,13 @@ fn main() -> anyhow::Result<()> {
         .copied()
         .unwrap_or(std::net::Ipv4Addr::new(127, 0, 0, 1));
     if candidates.is_empty() {
-        tracing::warn!("未找到局域网 IPv4，二维码将指向 127.0.0.1，手机无法连接");
+        tracing::warn!(
+            "no LAN IPv4 found; the QR code will point to 127.0.0.1 and phones cannot connect"
+        );
     }
 
     let token = app::new_token();
-    tracing::info!("配对页：http://127.0.0.1:{port}/pair?t={token}");
+    tracing::info!("pairing page: http://127.0.0.1:{port}/pair?t={token}");
     let (inject_tx, inject_rx) = mpsc::unbounded_channel();
     let (ui_tx, ui_rx) = mpsc::unbounded_channel();
     let (kick, _) = broadcast::channel(16);
@@ -62,6 +72,7 @@ fn main() -> anyhow::Result<()> {
 
     let shared = Shared {
         port,
+        lang,
         token: Arc::new(std::sync::RwLock::new(token)),
         lan_ip: Arc::new(std::sync::RwLock::new(lan_ip)),
         candidates: Arc::new(candidates),
@@ -140,7 +151,7 @@ fn main() -> anyhow::Result<()> {
         }
         Event::UserEvent(UserEvent::ShowQr) => {
             let _ = open::that(shared.pair_url());
-            tray.set_status("已打开二维码，等待手机连接");
+            tray.set_status(s.status_qr_opened);
         }
         Event::UserEvent(UserEvent::Status(msg)) => {
             if let Some(id) = msg.strip_prefix("menu:") {
@@ -152,7 +163,7 @@ fn main() -> anyhow::Result<()> {
         }
         Event::UserEvent(UserEvent::InjectionReady) => {
             while let Ok(job) = shared.inject_rx.blocking_lock().try_recv() {
-                tracing::info!("注入完成 id={}", job.id);
+                tracing::info!("injected id={}", job.id);
                 let outcome = injector.deliver(&shared, &job.text);
                 let ack = match outcome {
                     InjectOutcome::Pasted => HostToClient::Ack {
@@ -175,15 +186,19 @@ fn main() -> anyhow::Result<()> {
             }
             flash_until = Some(std::time::Instant::now() + Duration::from_millis(600));
             tray.set_state(connected, true);
-            tray.set_status(&format!("刚收到文本 · {}", shared.mode().label()));
+            tray.set_status(&format!(
+                "{} · {}",
+                s.status_received,
+                shared.mode().label(lang)
+            ));
         }
         Event::UserEvent(UserEvent::Connected(n)) => {
             connected = n > 0;
             tray.set_state(connected, false);
             tray.set_status(&if connected {
-                format!("已连接 {n} 台设备")
+                s.fmt_connected.replace("{n}", &n.to_string())
             } else {
-                "空闲 · 等待手机连接".into()
+                s.status_idle.into()
             });
         }
         Event::MainEventsCleared => {
