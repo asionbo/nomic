@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "cargo build",
+      "cargo check",
+      "cargo run",
+      "cargo test",
+      "rustc",
+      "bash",
+      "ls",
+      "cat",
+      "rg",
+      "node",
+      "Bash(node *)",
+      "Bash(sh *)",
+      "Bash(cargo *)",
+      "Bash(/Volumes/Samsung-SSD/rust/.cargo/bin/cargo *)"
+    ]
+  }
+}

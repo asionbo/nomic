@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>nomic · 输入</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f7f9; --card: #fff; --fg: #1c1e21; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb; --ok: #16a34a; --bad: #dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111318; --card: #1b1e24; --fg: #e8eaed; --muted: #9aa1ac; --line: #2d323b; --accent: #4f83f1; --ok: #34d399; --bad: #f87171; } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); background: var(--bg); color: var(--fg); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; }
+  .wrap { width: 100%; max-width: 560px; margin: 0 auto; flex: 1; display: flex; flex-direction: column; padding: 18px 0 20px; }
+  header { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 14px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: var(--ok); }
+  .dot.off { background: var(--bad); }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  #status { margin-left: auto; color: var(--muted); font-size: 13px; }
+  textarea { flex: 1; min-height: 180px; width: 100%; resize: none; padding: 14px; font: inherit; line-height: 1.6; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 14px; outline: none; -webkit-appearance: none; }
+  textarea:focus { border-color: var(--accent); }
+  .actions { display: flex; gap: 10px; margin-top: 12px; }
+  #send { flex: 1; padding: 15px; font-size: 17px; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 12px; -webkit-tap-highlight-color: transparent; }
+  #send:disabled { opacity: .5; }
+  #clear { padding: 15px 18px; font-size: 15px; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .hint { margin: 12px 0 0; color: var(--muted); font-size: 12.5px; }
+  #toast { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: 88vw; padding: 10px 16px; border-radius: 10px; background: #111827; color: #fff; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+  #toast.show { opacity: .94; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span id="dot" class="dot"></span>
+    <h1>nomic</h1>
+    <span id="status">连接中…</span>
+  </header>
+  <textarea id="text" placeholder="在这里输入，或用手机键盘上的麦克风按钮语音听写…" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="false"></textarea>
+  <div class="actions">
+    <button id="send" type="button">发送到电脑</button>
+    <button id="clear" type="button">清空</button>
+  </div>
+  <p class="hint">发送前请先点回电脑上要输入的输入框。文字会写入剪贴板并自动粘贴；若自动粘贴不可用，会提示你手动按 ⌘/Ctrl+V。语音听写请用手机系统键盘自带的麦克风，本页面不申请麦克风权限。</p>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  'use strict';
+  const TOKEN = new URLSearchParams(location.search).get('t') || '';
+  const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?t=' + encodeURIComponent(TOKEN);
+  const $ = (id) => document.getElementById(id);
+  const dot = $('dot'), status = $('status'), text = $('text'), send = $('send'), toast = $('toast');
+  let ws = null, pending = null, pendingSentId = null, retry = 1000, stopped = false, toastTimer = 0, ackTimer = 0;
+
+  function say(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+  function setState(kind, label) {
+    dot.className = 'dot' + (kind ? ' ' + kind : '');
+    status.textContent = label;
+    send.disabled = kind !== 'on';
+  }
+  function fail(msg) {
+    clearTimeout(ackTimer);
+    pending = null;
+    send.disabled = false;
+    say(msg || '发送失败，请重试');
+  }
+  function connect() {
+    if (stopped) return;
+    setState('', '连接中…');
+    try { ws = new WebSocket(wsUrl); } catch (_) { return scheduleRetry(); }
+
+    ws.onopen = () => {
+      retry = 1000;
+      setState('on', '已连接');
+      if (pending) {
+        // 重连后重发尚未确认的消息（服务端按 id 去重由手机侧 ack 保证不丢字）。
+        ws.send(JSON.stringify(pending));
+      }
+    };
+    ws.onmessage = (ev) => {
+      let m;
+      try { m = JSON.parse(ev.data); } catch (_) { return; }
+      if (m.type === 'ack' && pending && m.id === pending.id) {
+        clearTimeout(ackTimer);
+        const st = m.status;
+        if (st === 'pasted') {
+          text.value = '';
+          say('已粘贴到电脑');
+        } else if (st === 'clipboard-only') {
+          text.value = '';
+          say('已复制到剪贴板，请在电脑上按 ⌘/Ctrl+V');
+        } else {
+          fail('发送失败：' + (m.message || '未知错误'));
+          return;
+        }
+        pending = null;
+        send.disabled = text.value.trim() === '' || !ws || ws.readyState !== WebSocket.OPEN;
+      } else if (m.type === 'token-expired') {
+        stopped = true;
+        setState('off', '令牌已失效');
+        say('链接已失效，请在电脑上重新显示二维码');
+        if (ws) ws.close();
+      }
+    };
+    ws.onerror = () => { /* onclose 统一处理 */ };
+    ws.onclose = () => {
+      ws = null;
+      if (stopped) return;
+      setState('off', '已断开');
+      scheduleRetry();
+    };
+  }
+  function scheduleRetry() {
+    if (stopped) return;
+    setState('off', '重连中…');
+    setTimeout(connect, retry);
+    retry = Math.min(retry * 2, 15000);
+  }
+  function doSend() {
+    const value = text.value;
+    if (!value.trim()) { say('请先输入内容'); return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { say('尚未连接，正在重连…'); return; }
+    if (pending) { say('上一条还在处理'); return; }
+    pending = { type: 'text', id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10), text: value };
+    pendingSentId = pending.id;
+    send.disabled = true;
+    ws.send(JSON.stringify(pending));
+    // ack 超时保护：不丢字，允许手动重发。
+    clearTimeout(ackTimer);
+    ackTimer = setTimeout(() => {
+      if (pending && pending.id === pendingSentId) fail('电脑未响应，请重试（内容已保留）');
+    }, 8000);
+  }
+  send.addEventListener('click', doSend);
+  $('clear').addEventListener('click', () => { if (!pending) text.value = ''; text.focus(); });
+  text.addEventListener('input', () => { if (!pending) send.disabled = !text.value.trim() || !ws || ws.readyState !== WebSocket.OPEN; });
+  text.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSend(); }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (!ws || ws.readyState !== WebSocket.OPEN) && !stopped) { retry = 1000; connect(); }
+  });
+  setState('off', '连接中…');
+  connect();
+})();
+</script>
+</body>
+</html>
