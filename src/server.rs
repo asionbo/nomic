@@ -153,6 +153,7 @@ async fn pair_page(
         .replace("{{H1}}", s.pair_h1)
         .replace("{{SUB}}", s.pair_sub)
         .replace("{{QR_ARIA}}", s.pair_aria)
+        .replace("{{COPY}}", s.pair_copy)
         .replace(
             "{{COPY_JSON}}",
             &serde_json::to_string(s.pair_copy).unwrap(),
