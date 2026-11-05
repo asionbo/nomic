@@ -8,6 +8,9 @@ on:
 
 jobs:
   build:
+    # Environment secrets (MACOS_CERTIFICATE etc.) live in the "release"
+    # environment; without this declaration they are not visible here.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
