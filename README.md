@@ -4,7 +4,7 @@ Use your phone as a wireless keyboard for your computer. Type on your phone or u
 
 Built with native Rust for a tiny memory footprint.
 
-[中文说明](README.zh.md)
+[中文说明](README.zh.md) · [项目主页](https://asionbo.github.io/nomic/) · [站点源码](site/SITE.md)
 
 ## How it works
 
