@@ -68,6 +68,8 @@ fn main() -> anyhow::Result<()> {
     let (kick, _) = broadcast::channel(16);
     let (generation_tx, _) = watch::channel(0u64);
 
+    // set_activation_policy 仅 macOS 可用，其他平台这里 mut 未被使用。
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     // tao 默认在 run() 时强制 Regular 策略，会覆盖 Info.plist 的 LSUIElement，
     // 导致应用出现在 Dock。这里显式设为 Accessory：菜单栏常驻、不进 Dock。
