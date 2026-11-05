@@ -98,7 +98,7 @@ async fn health(
         "ok": true,
         "port": state.port,
         "lan_ip": state.lan_ip().to_string(),
-        "mode": state.mode().label(state.lang),
+        "mode": state.mode().label(state.lang()),
         "connected": state.connected.load(std::sync::atomic::Ordering::SeqCst),
     }))
     .into_response()
@@ -112,7 +112,7 @@ async fn mobile_page(
     if let Some(r) = check(&state, &headers, q.t.as_deref()) {
         return r;
     }
-    let s = state.lang.strings();
+    let s = state.lang().strings();
     let body = include_str!("../assets/mobile.html")
         .replace("{{HTML_LANG}}", s.html_lang)
         .replace("{{TITLE}}", s.mobile_title)
@@ -133,7 +133,7 @@ async fn pair_page(
         return r;
     }
     let url = state.mobile_url();
-    let s = state.lang.strings();
+    let s = state.lang().strings();
     let svg = match qr::svg(&url, s.pair_aria) {
         Ok(svg) => svg,
         Err(e) => {
@@ -295,10 +295,10 @@ async fn handle_socket(
                                         let _ = state.wake.send_event(crate::app::UserEvent::InjectionReady);
                                         None
                                     }
-                                    Err(_) => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang.strings().err_desktop_exited.into()) }),
+                                    Err(_) => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang().strings().err_desktop_exited.into()) }),
                                 }
                             }
-                            _ => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang.strings().err_bad_message.into()) }),
+                            _ => Some(HostToClient::Ack { id: "".into(), status: "error".into(), message: Some(state.lang().strings().err_bad_message.into()) }),
                         };
                         if let Some(msg) = reply
                             && socket

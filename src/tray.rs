@@ -2,6 +2,7 @@ use muda::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{TrayIcon, TrayIconBuilder};
 
 use crate::app::{DeliveryMode, Shared, UiCommand};
+use crate::i18n::Lang;
 use crate::icon;
 
 pub struct Tray {
@@ -10,6 +11,11 @@ pub struct Tray {
     paste: CheckMenuItem,
     clipboard_only: CheckMenuItem,
     network: Submenu,
+    language: Submenu,
+    show_qr: MenuItem,
+    copy_link: MenuItem,
+    rotate: MenuItem,
+    quit: MenuItem,
     pub show_qr_id: String,
     pub copy_link_id: String,
     pub paste_id: String,
@@ -17,12 +23,14 @@ pub struct Tray {
     pub rotate_id: String,
     pub quit_id: String,
     pub network_ids: Vec<String>,
+    pub lang_ids: Vec<String>,
     network_items: Vec<CheckMenuItem>,
+    lang_items: Vec<CheckMenuItem>,
 }
 
 impl Tray {
     pub fn new(shared: &Shared, auto_paste: bool) -> anyhow::Result<Self> {
-        let s = shared.lang.strings();
+        let s = shared.lang().strings();
         let menu = Menu::new();
         let status = MenuItem::new(s.status_idle, false, None);
         let show_qr = MenuItem::new(s.menu_show_qr, true, None);
@@ -37,6 +45,14 @@ impl Tray {
             network.append(&item)?;
             network_items.push(item);
         }
+        // 语言菜单的标签固定用各自语言的名称（English / 中文），不随当前语言变。
+        let language = Submenu::new(s.menu_language, true);
+        let mut lang_items = Vec::new();
+        for lang in [Lang::En, Lang::Zh] {
+            let item = CheckMenuItem::new(lang.menu_label(), true, lang == shared.lang(), None);
+            language.append(&item)?;
+            lang_items.push(item);
+        }
         let quit = MenuItem::new(s.menu_quit, true, None);
 
         menu.append(&status)?;
@@ -47,6 +63,7 @@ impl Tray {
         menu.append(&paste)?;
         menu.append(&clipboard_only)?;
         menu.append(&network)?;
+        menu.append(&language)?;
         menu.append(&rotate)?;
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&quit)?;
@@ -58,6 +75,10 @@ impl Tray {
         let rotate_id = rotate.id().as_ref().to_string();
         let quit_id = quit.id().as_ref().to_string();
         let network_ids = network_items
+            .iter()
+            .map(|item| item.id().as_ref().to_string())
+            .collect();
+        let lang_ids = lang_items
             .iter()
             .map(|item| item.id().as_ref().to_string())
             .collect();
@@ -78,6 +99,11 @@ impl Tray {
             paste,
             clipboard_only,
             network,
+            language,
+            show_qr,
+            copy_link,
+            rotate,
+            quit,
             show_qr_id,
             copy_link_id,
             paste_id,
@@ -85,9 +111,12 @@ impl Tray {
             rotate_id,
             quit_id,
             network_ids,
+            lang_ids,
             network_items,
+            lang_items,
         };
         let _ = &tray.network;
+        let _ = &tray.language;
         tray.set_selected_ip(shared.lan_ip().to_string());
         Ok(tray)
     }
@@ -106,6 +135,28 @@ impl Tray {
         }
     }
 
+    fn set_selected_lang(&mut self, selected: Lang) {
+        for (i, item) in self.lang_items.iter().enumerate() {
+            item.set_checked(i == selected as usize);
+        }
+    }
+
+    /// 切换语言后重写所有随语言变化的菜单文字（含 tooltip）。
+    fn retranslate(&mut self, lang: Lang) {
+        let s = lang.strings();
+        self.paste.set_text(s.menu_paste);
+        self.clipboard_only.set_text(s.menu_clipboard_only);
+        self.network.set_text(s.menu_network);
+        self.language.set_text(s.menu_language);
+        // status / show_qr / copy_link / rotate / quit 是 MenuItem，按 id 重建文本。
+        self.status.set_text(s.status_idle);
+        self.show_qr.set_text(s.menu_show_qr);
+        self.copy_link.set_text(s.menu_copy_link);
+        self.rotate.set_text(s.menu_rotate);
+        self.quit.set_text(s.menu_quit);
+        self.icon.set_tooltip(Some(s.tray_tooltip)).ok();
+    }
+
     /// 返回 true 表示应退出事件循环。
     pub fn handle_menu(&mut self, id: &str, shared: &Shared) -> bool {
         if id == self.show_qr_id {
@@ -118,12 +169,12 @@ impl Tray {
                 let _ = cb.set_text(shared.mobile_url());
             }
             self.status
-                .set_text(shared.lang.strings().status_link_copied);
+                .set_text(shared.lang().strings().status_link_copied);
             return false;
         }
         if id == self.paste_id || id == self.clipboard_only_id {
             let paste = id == self.paste_id;
-            let s = shared.lang.strings();
+            let s = shared.lang().strings();
             *shared.mode.write().unwrap() = if paste {
                 DeliveryMode::Paste
             } else {
@@ -144,7 +195,7 @@ impl Tray {
             let _ = shared.kick.send(());
             let _ = shared.ui_tx.send(UiCommand::RotateToken);
             self.status
-                .set_text(shared.lang.strings().status_token_rotated);
+                .set_text(shared.lang().strings().status_token_rotated);
             return false;
         }
         if id == self.quit_id {
@@ -159,10 +210,22 @@ impl Tray {
             self.set_selected_ip(ip.to_string());
             self.status.set_text(
                 shared
-                    .lang
+                    .lang()
                     .strings()
                     .fmt_network_switched
                     .replace("{ip}", &ip.to_string()),
+            );
+            return false;
+        }
+        if let Some(idx) = self.lang_ids.iter().position(|x| x == id) {
+            let lang = [Lang::En, Lang::Zh][idx];
+            *shared.lang.write().unwrap() = lang;
+            self.set_selected_lang(lang);
+            self.retranslate(lang);
+            self.status.set_text(
+                lang.strings()
+                    .fmt_lang_switched
+                    .replace("{lang}", lang.display_name()),
             );
         }
         false

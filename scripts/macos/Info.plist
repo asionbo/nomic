@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>nomic</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.nomic.app</string>
+	<string>io.asionbo.nomic.app</string>
 	<key>CFBundleExecutable</key>
 	<string>nomic</string>
 	<key>CFBundleIconFile</key>

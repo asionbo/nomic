@@ -32,7 +32,8 @@ impl DeliveryMode {
 #[derive(Clone)]
 pub struct Shared {
     pub port: u16,
-    pub lang: Lang,
+    /// 运行时可通过托盘菜单切换；手机页/二维码页按请求时值渲染。
+    pub lang: Arc<std::sync::RwLock<Lang>>,
     pub token: Arc<std::sync::RwLock<String>>,
     pub lan_ip: Arc<std::sync::RwLock<Ipv4Addr>>,
     pub candidates: Arc<Vec<Ipv4Addr>>,
@@ -163,6 +164,9 @@ pub fn lan_candidates() -> Vec<Ipv4Addr> {
 impl Shared {
     pub fn token(&self) -> String {
         self.token.read().unwrap().clone()
+    }
+    pub fn lang(&self) -> Lang {
+        *self.lang.read().unwrap()
     }
     pub fn lan_ip(&self) -> Ipv4Addr {
         *self.lan_ip.read().unwrap()

@@ -36,6 +36,7 @@ pub struct Strings {
     pub menu_clipboard_only: &'static str,
     pub menu_network: &'static str,
     pub menu_rotate: &'static str,
+    pub menu_language: &'static str,
     pub menu_quit: &'static str,
     pub status_idle: &'static str,
     pub status_qr_opened: &'static str,
@@ -44,6 +45,7 @@ pub struct Strings {
     pub status_received: &'static str,
     pub fmt_connected: &'static str,        // {n}
     pub fmt_network_switched: &'static str, // {ip}
+    pub fmt_lang_switched: &'static str,    // {lang}
     // 投递模式
     pub mode_paste: &'static str,
     pub mode_clipboard_only: &'static str,
@@ -96,6 +98,23 @@ impl Strings {
     }
 }
 
+impl Lang {
+    /// 两种语言都能读懂的自身名称，语言菜单固定显示它，不随当前语言变。
+    pub fn menu_label(self) -> &'static str {
+        match self {
+            Lang::En => "English",
+            Lang::Zh => "中文",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Lang::En => "English",
+            Lang::Zh => "中文",
+        }
+    }
+}
+
 const EN: Strings = Strings {
     html_lang: "en",
     tray_tooltip: "nomic · type from your phone",
@@ -105,6 +124,7 @@ const EN: Strings = Strings {
     menu_clipboard_only: "Copy to clipboard only",
     menu_network: "Network",
     menu_rotate: "Regenerate token",
+    menu_language: "Language",
     menu_quit: "Quit nomic",
     status_idle: "Idle · waiting for a phone",
     status_qr_opened: "QR page opened, waiting for a phone",
@@ -113,6 +133,7 @@ const EN: Strings = Strings {
     status_received: "Just received text",
     fmt_connected: "Connected: {n} device(s)",
     fmt_network_switched: "Network switched to {ip}, scan the QR again",
+    fmt_lang_switched: "Language switched to English; refresh the phone page for the new language",
     mode_paste: "Paste at cursor",
     mode_clipboard_only: "Copy to clipboard only",
     err_clipboard_unavailable: "Clipboard unavailable",
@@ -161,6 +182,7 @@ const ZH: Strings = Strings {
     menu_clipboard_only: "仅复制到剪贴板",
     menu_network: "网络",
     menu_rotate: "重新生成令牌",
+    menu_language: "语言 / Language",
     menu_quit: "退出 nomic",
     status_idle: "空闲 · 等待手机连接",
     status_qr_opened: "已打开二维码，等待手机连接",
@@ -169,6 +191,7 @@ const ZH: Strings = Strings {
     status_received: "刚收到文本",
     fmt_connected: "已连接 {n} 台设备",
     fmt_network_switched: "网络已切换为 {ip}，请重新扫码",
+    fmt_lang_switched: "语言已切换为中文，手机页刷新后生效",
     mode_paste: "粘贴到光标处",
     mode_clipboard_only: "仅复制到剪贴板",
     err_clipboard_unavailable: "剪贴板不可用",

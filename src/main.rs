@@ -44,7 +44,6 @@ fn main() -> anyhow::Result<()> {
         .find(|w| w[0] == "--lang")
         .and_then(|w| Lang::from_str(&w[1]))
         .unwrap_or_default();
-    let s = lang.strings();
 
     // 先绑定再生成二维码，保证 URL 里的端口是真实端口。
     let listener = app::bind(preferred_port)?;
@@ -72,7 +71,7 @@ fn main() -> anyhow::Result<()> {
 
     let shared = Shared {
         port,
-        lang,
+        lang: Arc::new(std::sync::RwLock::new(lang)),
         token: Arc::new(std::sync::RwLock::new(token)),
         lan_ip: Arc::new(std::sync::RwLock::new(lan_ip)),
         candidates: Arc::new(candidates),
@@ -151,7 +150,7 @@ fn main() -> anyhow::Result<()> {
         }
         Event::UserEvent(UserEvent::ShowQr) => {
             let _ = open::that(shared.pair_url());
-            tray.set_status(s.status_qr_opened);
+            tray.set_status(shared.lang().strings().status_qr_opened);
         }
         Event::UserEvent(UserEvent::Status(msg)) => {
             if let Some(id) = msg.strip_prefix("menu:") {
@@ -186,15 +185,17 @@ fn main() -> anyhow::Result<()> {
             }
             flash_until = Some(std::time::Instant::now() + Duration::from_millis(600));
             tray.set_state(connected, true);
+            let s = shared.lang().strings();
             tray.set_status(&format!(
                 "{} · {}",
                 s.status_received,
-                shared.mode().label(lang)
+                shared.mode().label(shared.lang())
             ));
         }
         Event::UserEvent(UserEvent::Connected(n)) => {
             connected = n > 0;
             tray.set_state(connected, false);
+            let s = shared.lang().strings();
             tray.set_status(&if connected {
                 s.fmt_connected.replace("{n}", &n.to_string())
             } else {

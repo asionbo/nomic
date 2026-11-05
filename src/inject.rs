@@ -42,7 +42,7 @@ impl Injector {
     }
 
     pub fn deliver(&mut self, shared: &Shared, text: &str) -> InjectOutcome {
-        let s = shared.lang.strings();
+        let s = shared.lang().strings();
         let Some(clipboard) = self.clipboard.as_mut() else {
             return InjectOutcome::Failed(s.err_clipboard_unavailable.into());
         };
