@@ -16,6 +16,8 @@ use i18n::Lang;
 use muda::MenuEvent;
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+#[cfg(target_os = "macos")]
+use tao::platform::macos::EventLoopExtMacOS;
 use tokio::sync::{broadcast, mpsc, watch};
 use tray_icon::TrayIconEvent;
 
@@ -66,7 +68,11 @@ fn main() -> anyhow::Result<()> {
     let (kick, _) = broadcast::channel(16);
     let (generation_tx, _) = watch::channel(0u64);
 
-    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    // tao 默认在 run() 时强制 Regular 策略，会覆盖 Info.plist 的 LSUIElement，
+    // 导致应用出现在 Dock。这里显式设为 Accessory：菜单栏常驻、不进 Dock。
+    #[cfg(target_os = "macos")]
+    event_loop.set_activation_policy(tao::platform::macos::ActivationPolicy::Accessory);
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
 
     let shared = Shared {
