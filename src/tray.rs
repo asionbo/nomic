@@ -10,6 +10,7 @@ pub struct Tray {
     status: MenuItem,
     paste: CheckMenuItem,
     clipboard_only: CheckMenuItem,
+    auto_enter: CheckMenuItem,
     network: Submenu,
     language: Submenu,
     show_qr: MenuItem,
@@ -20,6 +21,7 @@ pub struct Tray {
     pub copy_link_id: String,
     pub paste_id: String,
     pub clipboard_only_id: String,
+    pub auto_enter_id: String,
     pub rotate_id: String,
     pub quit_id: String,
     pub network_ids: Vec<String>,
@@ -37,6 +39,7 @@ impl Tray {
         let copy_link = MenuItem::new(s.menu_copy_link, true, None);
         let paste = CheckMenuItem::new(s.menu_paste, true, auto_paste, None);
         let clipboard_only = CheckMenuItem::new(s.menu_clipboard_only, true, !auto_paste, None);
+        let auto_enter = CheckMenuItem::new(s.menu_auto_enter, true, false, None);
         let rotate = MenuItem::new(s.menu_rotate, true, None);
         let network = Submenu::new(s.menu_network, true);
         let mut network_items = Vec::new();
@@ -62,6 +65,7 @@ impl Tray {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&paste)?;
         menu.append(&clipboard_only)?;
+        menu.append(&auto_enter)?;
         menu.append(&network)?;
         menu.append(&language)?;
         menu.append(&rotate)?;
@@ -72,6 +76,7 @@ impl Tray {
         let copy_link_id = copy_link.id().as_ref().to_string();
         let paste_id = paste.id().as_ref().to_string();
         let clipboard_only_id = clipboard_only.id().as_ref().to_string();
+        let auto_enter_id = auto_enter.id().as_ref().to_string();
         let rotate_id = rotate.id().as_ref().to_string();
         let quit_id = quit.id().as_ref().to_string();
         let network_ids = network_items
@@ -98,6 +103,7 @@ impl Tray {
             status,
             paste,
             clipboard_only,
+            auto_enter,
             network,
             language,
             show_qr,
@@ -108,6 +114,7 @@ impl Tray {
             copy_link_id,
             paste_id,
             clipboard_only_id,
+            auto_enter_id,
             rotate_id,
             quit_id,
             network_ids,
@@ -146,6 +153,7 @@ impl Tray {
         let s = lang.strings();
         self.paste.set_text(s.menu_paste);
         self.clipboard_only.set_text(s.menu_clipboard_only);
+        self.auto_enter.set_text(s.menu_auto_enter);
         self.network.set_text(s.menu_network);
         self.language.set_text(s.menu_language);
         // status / show_qr / copy_link / rotate / quit 是 MenuItem，按 id 重建文本。
@@ -186,6 +194,18 @@ impl Tray {
                 s.mode_paste
             } else {
                 s.mode_clipboard_only
+            });
+            return false;
+        }
+        if id == self.auto_enter_id {
+            // muda 在 macOS 上点击后已自动翻转勾选态，这里以菜单当前态为准写回共享状态。
+            let enabled = self.auto_enter.is_checked();
+            *shared.auto_enter.write().unwrap() = enabled;
+            let s = shared.lang().strings();
+            self.status.set_text(if enabled {
+                s.status_auto_enter_on
+            } else {
+                s.status_auto_enter_off
             });
             return false;
         }

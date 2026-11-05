@@ -38,6 +38,8 @@ pub struct Shared {
     pub lan_ip: Arc<std::sync::RwLock<Ipv4Addr>>,
     pub candidates: Arc<Vec<Ipv4Addr>>,
     pub mode: Arc<std::sync::RwLock<DeliveryMode>>,
+    /// 粘贴成功后是否追加模拟回车；托盘菜单开关，默认关闭。
+    pub auto_enter: Arc<std::sync::RwLock<bool>>,
     pub auto_paste_available: Arc<std::sync::atomic::AtomicBool>,
     pub connected: Arc<AtomicUsize>,
     /// 令牌轮换 / 退出时向所有 WS 连接广播。
@@ -173,6 +175,9 @@ impl Shared {
     }
     pub fn mode(&self) -> DeliveryMode {
         *self.mode.read().unwrap()
+    }
+    pub fn auto_enter(&self) -> bool {
+        *self.auto_enter.read().unwrap()
     }
     pub fn bump_connected(&self, delta: isize) -> usize {
         if delta > 0 {

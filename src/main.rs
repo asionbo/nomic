@@ -88,6 +88,7 @@ fn main() -> anyhow::Result<()> {
         } else {
             DeliveryMode::Paste
         })),
+        auto_enter: Arc::new(std::sync::RwLock::new(false)),
         auto_paste_available: Arc::new(AtomicBool::new(true)),
         connected: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         kick,

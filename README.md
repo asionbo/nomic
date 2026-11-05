@@ -12,14 +12,14 @@ Built with native Rust for a tiny memory footprint.
 2. Scan the code with your phone. The input page opens in your phone's browser. Both devices must be on the same Wi-Fi network.
 3. Click the target input field on your computer, then type on your phone and tap Send.
 
-Text is copied to the clipboard and automatically pasted at your cursor (using ⌘V / Ctrl+V). If auto-paste isn't available, you can paste the text manually from the clipboard.
+Text is copied to the clipboard and automatically pasted at your cursor (using ⌘V / Ctrl+V). If auto-paste isn't available, you can paste the text manually from the clipboard. Optionally, enable **"Press Enter after paste"** in the tray menu to have nomic also press Enter after each paste — handy for chat apps and search boxes.
 
 ## Features
 
 - **Phone dictation** — use the microphone built into your phone's keyboard; the page itself never requests microphone access.
 - **Instant pairing** — connect by scanning a QR code. No account or cloud service required; all traffic stays on your local network.
 - **Multiple devices** — connect several phones at once; text is sent to your computer one message at a time.
-- **Tray controls** — choose how text is delivered (auto-paste or clipboard only), select a network interface, rotate the token, and change the interface language.
+- **Tray controls** — choose how text is delivered (auto-paste or clipboard only), optionally press Enter automatically after each paste, select a network interface, rotate the token, and change the interface language.
 - **Bilingual interface** — English by default; switch to Chinese from the tray menu or with `--lang zh`.
 - **Lightweight** — a single ~1.5 MB binary, with no frontend framework, image libraries, or external assets.
 

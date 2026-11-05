@@ -78,7 +78,31 @@ impl Injector {
         })();
 
         match result {
-            Ok(()) => InjectOutcome::Pasted,
+            Ok(()) => {
+                // 自动回车：仅在粘贴成功后追加，仅剪贴板模式下不发送。
+                if shared.auto_enter() {
+                    let Some(enigo) = self.enigo.as_mut() else {
+                        return InjectOutcome::Pasted;
+                    };
+                    // 粘贴是异步的：目标应用还没把文字落进输入框时收到的回车
+                    // 会被当成普通换行而不是发送，所以先等它处理完。
+                    std::thread::sleep(std::time::Duration::from_millis(120));
+                    // 按下 → 短暂保持 → 松开，模拟真实按键节奏；
+                    // 零间隔的 keyDown/keyUp 会被部分聊天应用忽略。
+                    let result = (|| -> Result<(), enigo::InputError> {
+                        enigo.key(Key::Return, Direction::Press)?;
+                        std::thread::sleep(std::time::Duration::from_millis(40));
+                        enigo.key(Key::Return, Direction::Release)?;
+                        Ok(())
+                    })();
+                    if let Err(e) = result {
+                        // 回车失败不影响本次粘贴结果，只记录并自动关闭开关。
+                        tracing::warn!("simulated enter failed ({e}); disabling auto-enter");
+                        *shared.auto_enter.write().unwrap() = false;
+                    }
+                }
+                InjectOutcome::Pasted
+            }
             Err(e) => {
                 tracing::warn!("simulated paste failed ({e}); degrading to clipboard-only");
                 shared.auto_paste_available.store(false, Ordering::SeqCst);
