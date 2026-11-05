@@ -3,3 +3,4 @@
 *.log
 .claude/
 CLAUDE.md
+build_tag.sh
