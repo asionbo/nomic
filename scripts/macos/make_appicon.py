@@ -3,9 +3,9 @@
 
 Usage: python3 make_appicon.py <output.iconset>
 
-Renders the same "signal ring" motif as the tray icon (src/icon.rs) on a
-blue-gradient rounded square, and writes the 10 PNGs that
-`iconutil -c icns` expects. No image libraries: pixels are drawn with
+Renders the same motif as the tray icon (src/icon.rs) — a signal ring with
+a dot on it — in white on a black rounded square, and writes the 10 PNGs
+that `iconutil -c icns` expects. No image libraries: pixels are drawn with
 signed-distance functions and anti-aliased analytically.
 """
 import math
@@ -27,9 +27,8 @@ SIZES = [
     ("icon_512x512@2x.png", 1024),
 ]
 
-# Gradient, top -> bottom.
-TOP = (0.31, 0.62, 0.96)
-BOTTOM = (0.10, 0.30, 0.85)
+BG = (0.06, 0.06, 0.07)  # near-black, keeps pure highlights crisp
+FG = (1.0, 1.0, 1.0)     # white ring + dot
 
 
 def sd_rounded_rect(px: float, py: float, half: float, radius: float) -> float:
@@ -46,20 +45,16 @@ def render(size: int) -> bytes:
     box_half = half - 0.5
     radius = size * 0.225          # macOS-style corner radius
     ring_r = size * 0.27           # ring radius
-    ring_w = size * 0.058          # ring thickness
+    ring_w = size * 0.075          # ring thickness
     dot_r = size * 0.088
     ring_cy = -size * 0.03         # ring sits slightly above center
     # Signal dot sits on the ring, lower-right.
     dot_cx = ring_r * math.cos(-math.pi / 4)
     dot_cy = ring_cy - ring_r * math.sin(-math.pi / 4)
+    gap = dot_r + size * 0.030     # hole carved around the dot so it floats off the ring
 
     for y in range(size):
         py = y + 0.5 - half
-        # Vertical gradient position 0..1 over the tile.
-        t = min(1.0, max(0.0, (py + half) / size))
-        r_bg = (TOP[0] + (BOTTOM[0] - TOP[0]) * t) * 255.0
-        g_bg = (TOP[1] + (BOTTOM[1] - TOP[1]) * t) * 255.0
-        b_bg = (TOP[2] + (BOTTOM[2] - TOP[2]) * t) * 255.0
         row = y * size * 4
         for x in range(size):
             px = x + 0.5 - half
@@ -67,14 +62,17 @@ def render(size: int) -> bytes:
             a_box = min(1.0, max(0.0, 0.5 - d_box))  # corner anti-aliasing
             if a_box <= 0.0:
                 continue
-            # Ring + dot in white.
+            # Ring, with a circular hole carved around the dot, plus the solid dot.
             d_ring = abs(math.hypot(px, py - ring_cy) - ring_r) - ring_w / 2.0
-            d_dot = math.hypot(px - dot_cx, py - dot_cy) - dot_r
-            w = min(1.0, max(0.0, 0.5 - min(d_ring, d_dot)))
+            d_dot = math.hypot(px - dot_cx, py - dot_cy)
+            ring_cov = min(1.0, max(0.0, 0.5 - d_ring))
+            hole_cov = min(1.0, max(0.0, gap - d_dot + 0.5))
+            dot_cov = min(1.0, max(0.0, dot_r - d_dot + 0.5))
+            w = max(ring_cov * (1.0 - hole_cov), dot_cov)
             i = row + x * 4
-            rgba[i] = int(min(255.0, max(0.0, r_bg + (255.0 - r_bg) * w)))
-            rgba[i + 1] = int(min(255.0, max(0.0, g_bg + (255.0 - g_bg) * w)))
-            rgba[i + 2] = int(min(255.0, max(0.0, b_bg + (255.0 - b_bg) * w)))
+            rgba[i] = int(min(255.0, max(0.0, BG[0] * 255.0 + (FG[0] * 255.0 - BG[0] * 255.0) * w)))
+            rgba[i + 1] = int(min(255.0, max(0.0, BG[1] * 255.0 + (FG[1] * 255.0 - BG[1] * 255.0) * w)))
+            rgba[i + 2] = int(min(255.0, max(0.0, BG[2] * 255.0 + (FG[2] * 255.0 - BG[2] * 255.0) * w)))
             rgba[i + 3] = int(a_box * 255.0)
     return bytes(rgba)
 

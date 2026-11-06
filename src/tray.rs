@@ -92,11 +92,9 @@ impl Tray {
             .with_menu(Box::new(menu))
             .with_tooltip(s.tray_tooltip)
             .with_icon(icon::icon(false, false))
+            // macOS 模板图标：系统按明暗自动着色（仅 macOS 生效）。
+            .with_icon_as_template(cfg!(target_os = "macos"))
             .build()?;
-
-        // macOS 使用模板图标，跟随系统明暗。
-        #[cfg(target_os = "macos")]
-        icon.set_icon_as_template(true);
 
         let mut tray = Self {
             icon,
@@ -133,7 +131,12 @@ impl Tray {
     }
 
     pub fn set_state(&self, connected: bool, flash: bool) {
-        let _ = self.icon.set_icon(Some(icon::icon(connected, flash)));
+        // set_icon 内部会把模板标志重置为 false，必须用带 template 的变体，
+        // 否则图标在第一次状态切换后退回彩色。
+        let _ = self.icon.set_icon_with_as_template(
+            Some(icon::icon(connected, flash)),
+            cfg!(target_os = "macos"),
+        );
     }
 
     pub fn set_selected_ip(&mut self, selected: String) {
